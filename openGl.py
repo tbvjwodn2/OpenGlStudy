@@ -28,13 +28,13 @@ class App:
         glUniform1i(glGetUniformLocation(self.shader, "imageTexture"), 0)
 
         self.cube = Cube(
-            position=[0,0,-3],
+            position=[0,0,-10],
             eulers = [0,0,0]
             )
 
-        self.cubeMesh = CubeMesh()
+        self.mesh = Mesh("model/simpleCube.obj")
 
-        self.inputTexture = Material("textures/yiyaho.png")
+        self.inputTexture = Material("textures/wood_texture_01.png")
 
         projection_transform = pyrr.matrix44.create_perspective_projection(
             fovy = 45, aspect = 640/480,
@@ -105,8 +105,8 @@ class App:
 
             glUniformMatrix4fv(self.modelMatrixLocation, 1, GL_FALSE, model_transform)
 
-            glBindVertexArray(self.cubeMesh.vao)
-            glDrawArrays(GL_TRIANGLES, 0, self.cubeMesh.vertex_count)
+            glBindVertexArray(self.mesh.vao)
+            glDrawArrays(GL_TRIANGLES, 0, self.mesh.vertex_count)
 
             pg.display.flip()
 
@@ -116,11 +116,111 @@ class App:
 
     def quit(self):
         
-        self.cubeMesh.destroy()
-        # self.triangle.destroy()
+        self.mesh.destroy()
         self.inputTexture.destory()
         glDeleteProgram(self.shader)
         pg.quit()
+
+class Mesh:
+    def __init__(self, file_path):
+        self.vertices = self.loadMesh(file_path)
+        #vertices [Px, Py, Pz, s, t, Nx, Ny, Nz]
+        # each 4 byte
+
+        self.vertex_count = len(self.vertices)
+
+        self.vertices = np.array(self.vertices, dtype=np.float32)
+
+        self.vao = glGenVertexArrays(1)
+        glBindVertexArray(self.vao)
+
+        self.vbo = glGenBuffers(1)
+        glBindBuffer(GL_ARRAY_BUFFER, self.vbo)
+
+        glBufferData(GL_ARRAY_BUFFER, self.vertices.nbytes, self.vertices, GL_STATIC_DRAW)
+
+        glEnableVertexAttribArray(0)
+        glVertexAttribPointer(0,3,GL_FLOAT,GL_FALSE,32, ctypes.c_void_p(0))
+
+        glEnableVertexAttribArray(1)
+        glVertexAttribPointer(1,2,GL_FLOAT,GL_FALSE,32, ctypes.c_void_p(12))
+
+        glEnableVertexAttribArray(2)
+        glVertexAttribPointer(2,3,GL_FLOAT,GL_FALSE,32, ctypes.c_void_p(20))
+
+
+
+    def loadMesh(self,file_path):
+
+
+        vertices = []
+
+        v_array = []
+        vt_array = []
+        vn_array = []
+        with open(file_path, 'r') as f:
+            line = f.readline()
+            while line:
+                
+                if not line: break
+
+                firstspace = line.find(" ")
+                flag = line[0:firstspace]
+
+                values = line[firstspace+1:]
+                values = values.replace("\n", "")
+                values = values.split(" ")
+
+                if (flag=="v"):
+                    l = [float(x) for x in values]
+                    v_array.append(l)
+                elif flag=="vt":
+                    l = [float(x) for x in values]
+                    vt_array.append(l)
+                elif flag=="vn":
+                    l = [float(x) for x in values]
+                    vn_array.append(l)
+                    
+                elif flag=="f":
+                    face_verts = []
+                    face_uv = []
+                    face_normals = []
+
+                    for vertex in values:
+                        # vertex = v/vt/vn
+                        # [v, vt, vn]
+                        l = vertex.split("/")
+                        p_idx = int(l[0]) -1
+                        face_verts.append(v_array[p_idx])
+                        
+                        uv_idx = int(l[1])-1
+                        face_uv.append(vt_array[uv_idx])
+
+                        normal_idx = int(l[2]) -1
+                        face_normals.append(vn_array[normal_idx])
+
+                    triangles_in_face = len(values)-2
+                    vo = []
+                    for i in range(triangles_in_face):
+                        vo.append(0)
+                        vo.append(i+1)
+                        vo.append(i+2)
+
+                    for i in vo:
+                        for x in face_verts[i]:
+                            vertices.append(x)
+                        for x in face_uv[i]:
+                            vertices.append(x)
+                        for x in face_normals[i]:
+                            vertices.append(x)
+                line = f.readline()
+
+        return vertices
+    def destroy(self):
+        glDeleteBuffers(1, (self.vbo, ))
+        glDeleteVertexArrays(1, (self.vao, ) )
+        
+    
 
 class CubeMesh:
 
